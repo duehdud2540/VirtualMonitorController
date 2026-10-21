@@ -90,7 +90,7 @@ namespace VirtualMonitor
         // 명령행 옵션에 따라 진단 또는 일반 실행을 선택합니다. 일반 실행은 트레이와 메인 창을 만들고 명시적 종료 방식으로 유지합니다.
         protected override void OnStartup(StartupEventArgs e)
         {
-            services = new ApplicationServices(Dispatcher, this, e.Args.Contains("--wpf-preview", StringComparer.OrdinalIgnoreCase));
+            services = new ApplicationServices(Dispatcher, this);
             if (e.Args.Contains("--diagnose-dependency-injection"))
             {
                 ShutdownMode = ShutdownMode.OnExplicitShutdown;

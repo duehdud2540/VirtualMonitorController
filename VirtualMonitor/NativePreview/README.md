@@ -1,6 +1,8 @@
 ﻿# DirectX 미리보기 출력 (0.2.0)
 
-기본 경로는 WPF HwndHost의 자식 HWND를 사용합니다. 렌더링은 캡처 전용 스레드에서 실행합니다.
+현재 `feature/useBitmapCapture` 브랜치의 앱 미리보기는 WPF 비트맵을 사용합니다. 현재 동작은 [BITMAP_PREVIEW.md](../BITMAP_PREVIEW.md)를 참고하세요.
+
+아래는 보관된 DirectX 렌더러의 설명입니다. DirectX 경로는 WPF HwndHost의 자식 HWND를 사용하며 렌더링은 캡처 전용 스레드에서 실행합니다.
 
 - NativeCapture가 Windows Graphics Capture의 최신 프레임을 같은 장치의 shader-resource 텍스처로 GPU 복사합니다.
 - 지원하는 Windows에서는 `MinUpdateInterval`을 0으로 설정해 캡처 세션의 기본 갱신 간격을 제거합니다. 실제 프레임 수는 원본 화면 갱신과 Windows 캡처 처리에 따라 달라집니다.

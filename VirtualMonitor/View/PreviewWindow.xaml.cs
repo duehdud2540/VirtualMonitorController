@@ -11,7 +11,6 @@ internal sealed partial class PreviewWindow : Window, IConfigurationParticipant
 {
     private readonly PreviewViewModel viewModel;
     private readonly IConfigurationChanges changes;
-    private readonly DirectXPreview? directXPreview;
     internal long PresentedFrames => viewModel.PresentedFrames;
     internal string DiagnosticStatus => viewModel.Status;
     internal double CaptureMilliseconds => viewModel.CaptureMilliseconds;
@@ -22,26 +21,24 @@ internal sealed partial class PreviewWindow : Window, IConfigurationParticipant
         add => viewModel.DuplicateMonitorOpened += value;
         remove => viewModel.DuplicateMonitorOpened -= value;
     }
-    // 캡처 자원 해제를 기다린 다음 DirectX 렌더러를 해제하여 장치 재구성을 준비합니다.
+    // 캡처 자원 해제를 기다린 뒤 장치 재구성을 허용합니다.
     internal async Task PrepareConfigurationChangeAsync()
     {
         await viewModel.PrepareConfigurationChangeAsync();
-        directXPreview?.SuspendOutput();
     }
-    // DirectX 출력을 허용한 뒤 ViewModel의 목록 감시와 캡처를 재개합니다.
+    // ViewModel의 목록 감시와 비트맵 캡처를 재개합니다.
     internal async Task CompleteConfigurationChangeAsync()
     {
-        directXPreview?.ResumeOutput();
         await viewModel.CompleteConfigurationChangeAsync();
     }
     // 창을 특정 가상 모니터에 연결하도록 ViewModel에 전달합니다.
     internal void SelectVirtualMonitor(MonitorDevice? device) => viewModel.SelectVirtualMonitor(device);
 
-    // XAML과 ViewModel을 연결합니다. 기본은 DirectX 출력이며 --wpf-preview 옵션이면 WPF 비트맵 경로를 사용합니다.
+    // 이 브랜치는 XAML Image에 바인딩된 WriteableBitmap을 항상 사용합니다.
     Task IConfigurationParticipant.PrepareAsync() => PrepareConfigurationChangeAsync();
     Task IConfigurationParticipant.ResumeAsync() => CompleteConfigurationChangeAsync();
 
-    internal PreviewWindow(PreviewViewModel viewModel, IConfigurationChanges changes, Func<DirectXPreview> createRenderer, bool useWpfPreview, MonitorDevice? device = null)
+    internal PreviewWindow(PreviewViewModel viewModel, IConfigurationChanges changes, MonitorDevice? device = null)
     {
         this.viewModel = viewModel;
         this.changes = changes;
@@ -50,17 +47,6 @@ internal sealed partial class PreviewWindow : Window, IConfigurationParticipant
             InitializeComponent();
             if (device != null) viewModel.SelectVirtualMonitor(device);
             DataContext = viewModel;
-            if (!useWpfPreview)
-            {
-                directXPreview = createRenderer();
-                viewModel.OutputFailed += UseWpfFallback;
-                viewport.Content = directXPreview;
-                viewModel.OutputFrame = directXPreview.Present;
-                viewModel.OutputTick = directXPreview.Tick;
-                viewModel.ClearOutput = directXPreview.Clear;
-                viewModel.SampleOutputStatistics = directXPreview.SampleStatistics;
-                viewModel.ResetOutputStatistics = directXPreview.ResetStatistics;
-            }
             viewModel.PropertyChanged += ViewModel_PropertyChanged;
             UpdatePreviewChrome();
             ApplyScale();
@@ -69,21 +55,8 @@ internal sealed partial class PreviewWindow : Window, IConfigurationParticipant
         catch
         {
             viewModel.Dispose();
-            directXPreview?.Dispose();
             throw;
         }
-    }
-
-    private void UseWpfFallback()
-    {
-        viewModel.OutputFrame = null;
-        viewModel.OutputTick = null;
-        viewModel.SampleOutputStatistics = null;
-        viewModel.ResetOutputStatistics = null;
-        viewModel.ClearOutput = null;
-        directXPreview?.SuspendOutput();
-        viewport.Content = preview;
-        ApplyScale();
     }
 
     internal Task StopAsync() => viewModel.StopAsync();
@@ -117,9 +90,7 @@ internal sealed partial class PreviewWindow : Window, IConfigurationParticipant
     {
         changes.Unregister(this);
         viewModel.PropertyChanged -= ViewModel_PropertyChanged;
-        viewModel.OutputFailed -= UseWpfFallback;
         viewModel.Dispose();
-        directXPreview?.Dispose();
     }
 
     // 속성 변화를 실제 창 배율·제목 표시줄·전체 화면에 반영합니다.
@@ -158,12 +129,6 @@ internal sealed partial class PreviewWindow : Window, IConfigurationParticipant
         bool native = viewModel.ActualPixels;
         var surface = viewModel.Frame;
         var dpi = VisualTreeHelper.GetDpi(this);
-        if (directXPreview != null)
-        {
-            var display = viewModel.SelectedDisplay;
-            directXPreview.Width = native && display != null ? display.Width / dpi.DpiScaleX : double.NaN;
-            directXPreview.Height = native && display != null ? display.Height / dpi.DpiScaleY : double.NaN;
-        }
         preview.Width = native && surface != null ? surface.PixelWidth / dpi.DpiScaleX : double.NaN;
         preview.Height = native && surface != null ? surface.PixelHeight / dpi.DpiScaleY : double.NaN;
         preview.Stretch = native ? Stretch.Fill : Stretch.Uniform;

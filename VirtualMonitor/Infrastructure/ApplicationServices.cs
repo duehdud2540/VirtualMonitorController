@@ -20,7 +20,7 @@ internal sealed class ApplicationServices
         return new(log, AtomicFile, new MonitorManagerDiagnostics(Names, Windows), new PreviewOwnership());
     }
 
-    internal ApplicationServices(Dispatcher dispatcher, IApplicationLifetime lifetime, bool useWpfPreview)
+    internal ApplicationServices(Dispatcher dispatcher, IApplicationLifetime lifetime)
     {
         var files = new PhysicalFileSystem();
         AtomicFile = new AtomicFile();
@@ -43,6 +43,6 @@ internal sealed class ApplicationServices
         CreateCaptureSession = display => new ScreenCapture(display);
         var viewModels = new ViewModelFactory(state, changes, operations, ownership, Log,
             ui => new PreviewCaptureService(ui, CreateCaptureSession, Log));
-        Windows = new WindowFactory(dispatcher, viewModels, changes, lifetime, Log, useWpfPreview);
+        Windows = new WindowFactory(dispatcher, viewModels, changes, lifetime, Log);
     }
 }

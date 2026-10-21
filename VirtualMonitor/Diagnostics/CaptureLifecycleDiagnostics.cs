@@ -23,7 +23,36 @@ internal sealed class CaptureLifecycleDiagnostics(Func<Dispatcher, PreviewCaptur
         if (capture.CaptureRequests != 0) throw new InvalidOperationException("No monitor should be captured by this diagnostic.");
         await CheckActiveCaptureAsync(dispatcher);
         await CheckFrameEventsAsync(dispatcher);
-        Console.WriteLine("Capture lifecycle: idle, injected session, GPU output fallback and disposal checks passed (no live devices).");
+        await CheckBitmapCaptureAsync(dispatcher);
+        Console.WriteLine("Capture lifecycle: idle, frame events, bitmap pixels, GPU output fallback and disposal checks passed (no live devices).");
+    }
+    private async Task CheckBitmapCaptureAsync(Dispatcher dispatcher)
+    {
+        var display = new MonitorDisplay("bitmap-fake", "", 0, 0, 1, 1, true);
+        var copied = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        bool released = false;
+        var session = new FakeCapture(display, () => released = true);
+        await using var service = new PreviewCaptureService(dispatcher, _ => session, log);
+        service.FrameReady += (_, frame) =>
+        {
+            try
+            {
+                Require(dispatcher.CheckAccess(), "bitmap delivery uses UI thread");
+                var bitmap = new System.Windows.Media.Imaging.WriteableBitmap(1, 1, 96, 96,
+                    System.Windows.Media.PixelFormats.Bgr32, null);
+                bitmap.WritePixels(new System.Windows.Int32Rect(0, 0, 1, 1), frame.Pixels, frame.BufferSize, frame.Stride);
+                int[] pixels = new int[1];
+                bitmap.CopyPixels(pixels, 4, 0);
+                Require((pixels[0] & 0xFFFFFF) == 0x123456, "CPU capture pixels reach WPF bitmap unchanged");
+                copied.TrySetResult();
+            }
+            catch (Exception ex) { copied.TrySetException(ex); }
+        };
+        service.SelectDisplay(display);
+        service.Start();
+        await copied.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await service.StopAsync().WaitAsync(TimeSpan.FromSeconds(3));
+        Require(!session.GpuRequested && released, "bitmap capture never requests GPU output and releases its buffer");
     }
     private async Task CheckFrameEventsAsync(Dispatcher dispatcher)
     {
@@ -99,6 +128,7 @@ internal sealed class CaptureLifecycleDiagnostics(Func<Dispatcher, PreviewCaptur
 
     private sealed class FakeCapture(MonitorDisplay display, Action disposed) : ICaptureSession
     {
+        public bool GpuRequested { get; private set; }
         public nint Pixels { get; private set; } = Marshal.AllocHGlobal(4);
         public nint Texture => 0;
         public nint Device => 0;
@@ -107,7 +137,7 @@ internal sealed class CaptureLifecycleDiagnostics(Func<Dispatcher, PreviewCaptur
         public int Stride => 4;
         public int BufferSize => 4;
         public string DisplayName => display.Name;
-        public bool Read(MonitorDisplay target, bool gpu = false) { Marshal.WriteInt32(Pixels, 0x123456); return true; }
+        public bool Read(MonitorDisplay target, bool gpu = false) { GpuRequested |= gpu; Marshal.WriteInt32(Pixels, 0x123456); return true; }
         public void Dispose() { if (Pixels != 0) { Marshal.FreeHGlobal(Pixels); Pixels = 0; disposed(); } }
     }
 

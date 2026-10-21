@@ -112,7 +112,7 @@ internal sealed class PreviewViewModel : ObservableObject, IDisposable
     public bool IsCompactMode { get => compactMode; set => SetProperty(ref compactMode, value); }
     public bool CanSelectDisplay => !isBoundToDevice;
     public string HeaderTitle => SelectedDisplay?.DisplayName ?? preferredDisplayName ?? "가상 모니터";
-    public string WindowTitle => $"{HeaderTitle} · 원본 화질 / 자동 프레임 갱신";
+    public string WindowTitle => $"{HeaderTitle} · 비트맵 / 자동 프레임 갱신";
     public bool IsFullScreen
     {
         get => fullScreen;
@@ -323,7 +323,7 @@ internal sealed class PreviewViewModel : ObservableObject, IDisposable
         Status = message;
     }
 
-    // CPU 대체 경로만 UI 스레드에서 현재 화면의 비트맵으로 복사합니다.
+    // UI 스레드에서 재사용하는 비트맵에 CPU 픽셀 버퍼를 복사합니다.
     private void Present(MonitorDisplay display, ICaptureSession buffer)
     {
         if (disposed || paused || changingConfiguration || SelectedDisplay != display) return;
@@ -336,7 +336,7 @@ internal sealed class PreviewViewModel : ObservableObject, IDisposable
         double now = clock.Elapsed.TotalSeconds;
         if (now - statsStarted >= 1)
         {
-            Status = $"{buffer.Width} × {buffer.Height} · 원본 무압축 · {frameCount / (now - statsStarted):F1}fps 갱신 · " +
+            Status = $"{buffer.Width} × {buffer.Height} · WPF 비트맵 · {frameCount / (now - statsStarted):F1}fps 갱신 · " +
                 (ActualPixels ? "1:1 픽셀" : "창에 맞춤 (글자가 흐리면 1:1 선택)") + " · 보기 전용";
             frameCount = 0;
             statsStarted = now;
