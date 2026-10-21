@@ -1,5 +1,5 @@
 
-[![Download Latest](https://img.shields.io/badge/Download-Latest_Release-blue?style=for-the-badge&logo=windows)](https://github.com/{username}/{repo}/releases/latest)
+[![Download Latest](https://img.shields.io/badge/Download-Latest_Release-blue?style=for-the-badge&logo=windows)](https://github.com/duehdud2540/VirtualMonitorController/releases/latest)
 
 # VirtualMonitor
 
