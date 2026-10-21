@@ -426,3 +426,31 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+# VirtualMonitor project artifacts
+/VirtualMonitor/dist/
+/VirtualMonitor/Driver/x64/
+/VirtualMonitor/LegacyPreview/
+*.bak
+
+# Downloaded SDK/WDK installers and installation records
+/VirtualMonitor/setup/wdk_layout/
+/VirtualMonitor/setup/*.exe
+/VirtualMonitor/setup/*.html
+/VirtualMonitor/setup/*-exit.txt
+
+# Native libraries generated from the checked-in C++ sources
+/VirtualMonitor/NativeCapture/*.dll
+/VirtualMonitor/NativeCapture/*.lib
+/VirtualMonitor/NativeCapture/*.exp
+/VirtualMonitor/NativePreview/*.dll
+/VirtualMonitor/NativePreview/*.lib
+/VirtualMonitor/NativePreview/*.exp
+# Historical setup tools and unused driver development references
+/VirtualMonitor/setup/
+/VirtualMonitor/IddSampleDriver.reference.cpp
+/VirtualMonitor/IddSampleDriver.reference.h
+/VirtualMonitor/Driver/*
+!/VirtualMonitor/Driver/SignedDriver/
+!/VirtualMonitor/Driver/LICENSE
+!/VirtualMonitor/Driver/UPSTREAM.md

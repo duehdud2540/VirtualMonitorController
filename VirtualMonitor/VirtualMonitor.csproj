@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- WPF owns DPI configuration; Windows Forms is used only for the tray icon. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+    <PlatformTarget>x64</PlatformTarget>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.2.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <None Update="NativeCapture\VirtualMonitor.Capture.dll" CopyToOutputDirectory="PreserveNewest" TargetPath="VirtualMonitor.Capture.dll" />
+    <None Update="NativePreview\VirtualMonitor.Preview.dll" CopyToOutputDirectory="PreserveNewest" TargetPath="VirtualMonitor.Preview.dll" />
+  </ItemGroup>
+
+  <Target Name="BuildNativeLibraries" BeforeTargets="PrepareForBuild"
+          Inputs="NativeCapture\Capture.cpp;NativePreview\Renderer.cpp;build-native.cmd"
+          Outputs="NativeCapture\VirtualMonitor.Capture.dll;NativePreview\VirtualMonitor.Preview.dll"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="&quot;$(MSBuildProjectDirectory)\build-native.cmd&quot;" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+</Project>

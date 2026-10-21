@@ -1,0 +1,14 @@
+<Window x:Class="VirtualMonitor.CaptureTestPattern"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="캡처 성능 검사 · 자동 종료" Width="700" Height="240" ShowInTaskbar="False">
+    <Canvas Background="DarkSlateBlue">
+        <TextBlock Text="60fps 캡처 성능 검사" Foreground="White" FontSize="24"/>
+        <Rectangle Width="80" Height="100" Fill="Orange">
+            <Rectangle.RenderTransform>
+                <TranslateTransform x:Name="motion"/>
+            </Rectangle.RenderTransform>
+        </Rectangle>
+    </Canvas>
+</Window>

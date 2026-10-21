@@ -1,0 +1,74 @@
+<Window x:Class="VirtualMonitor.PreviewWindow"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding WindowTitle, FallbackValue='가상 모니터 · 원본 화질 / 60fps'}"
+        Width="1280" Height="800" MinWidth="360" MinHeight="180"
+        Loaded="Window_Loaded" Closed="Window_Closed"
+        StateChanged="Window_StateChanged" DpiChanged="Window_DpiChanged"
+        Topmost="{Binding IsTopmost, Mode=TwoWay}"
+        Background="Black" Foreground="White" UseLayoutRounding="True">
+    <Window.InputBindings>
+        <KeyBinding Key="F11" Command="{Binding ToggleFullScreenCommand}"/>
+        <KeyBinding Key="Escape" Command="{Binding ExitFullScreenCommand}"/>
+    </Window.InputBindings>
+    <Window.CommandBindings>
+        <CommandBinding Command="SystemCommands.MinimizeWindowCommand" Executed="Minimize_Executed"/>
+        <CommandBinding Command="SystemCommands.MaximizeWindowCommand" Executed="MaximizeRestore_Executed"/>
+        <CommandBinding Command="SystemCommands.CloseWindowCommand" Executed="Close_Executed"/>
+    </Window.CommandBindings>
+    <Window.Resources>
+        <Style x:Key="ActionButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="8,2"/>
+            <Setter Property="Margin" Value="3,0,0,0"/>
+        </Style>
+        <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}"/>
+        <Style x:Key="CaptionButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Margin" Value="0"/>
+        </Style>
+        <Style x:Key="PinCheckBoxStyle" TargetType="CheckBox">
+            <Setter Property="Content" Value="항상 위"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="8,0"/>
+            <Setter Property="ToolTip" Value="다른 일반 창보다 앞에 고정합니다. 해제하면 원래대로 돌아갑니다."/>
+            <Setter Property="IsChecked" Value="{Binding IsTopmost, Mode=TwoWay}"/>
+        </Style>
+    </Window.Resources>
+    <DockPanel x:Name="previewLayout" Margin="12">
+        <Grid x:Name="compactHeader" DockPanel.Dock="Top" Height="28" Background="#1E2430" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding HeaderTitle, FallbackValue='가상 모니터'}" Margin="8,0,4,0" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" ToolTip="제목 영역을 끌어 이동 · 두 번 클릭하여 최대화/복원"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True">
+                <CheckBox Style="{StaticResource PinCheckBoxStyle}"/>
+                <Button Content="기본 모드" Command="{Binding NormalModeCommand}"/>
+                <Button Content="—" ToolTip="최소화" AutomationProperties.Name="최소화"
+                        Style="{StaticResource CaptionButtonStyle}" Command="{x:Static SystemCommands.MinimizeWindowCommand}"/>
+                <Button Content="□" ToolTip="최대화 / 복원" AutomationProperties.Name="최대화 / 복원"
+                        Style="{StaticResource CaptionButtonStyle}" Command="{x:Static SystemCommands.MaximizeWindowCommand}"/>
+                <Button Content="×" ToolTip="미리보기 닫기" AutomationProperties.Name="미리보기 닫기"
+                        Style="{StaticResource CaptionButtonStyle}" Command="{x:Static SystemCommands.CloseWindowCommand}"/>
+            </StackPanel>
+        </Grid>
+        <WrapPanel x:Name="previewControls" DockPanel.Dock="Top">
+            <ComboBox ItemsSource="{Binding Displays}" SelectedItem="{Binding SelectedDisplay, Mode=TwoWay}" IsEnabled="{Binding CanSelectDisplay}" DisplayMemberPath="DisplayName" MinWidth="150"/>
+            <Button Content="전체 화면 (F11)" Command="{Binding ToggleFullScreenCommand}"/>
+            <CheckBox Style="{StaticResource PinCheckBoxStyle}"/>
+            <Button Content="간결 모드" Command="{Binding CompactModeCommand}"/>
+        </WrapPanel>
+        <DockPanel x:Name="footer" DockPanel.Dock="Bottom">
+            <CheckBox x:Name="actualPixels" IsChecked="{Binding ActualPixels, Mode=TwoWay}" DockPanel.Dock="Right" Content="원본 크기 (1:1)"
+                      Margin="8,0,4,0" VerticalAlignment="Center"/>
+            <TextBlock x:Name="status" Text="{Binding Status}" Margin="8" TextWrapping="Wrap"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+        </DockPanel>
+        <ScrollViewer x:Name="viewport">
+            <Image x:Name="preview" Source="{Binding Frame}" Stretch="Uniform" SnapsToDevicePixels="True"/>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

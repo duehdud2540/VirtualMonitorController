@@ -1,0 +1,46 @@
+<Window x:Class="VirtualMonitor.MonitorManagerWindow" x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="가상 모니터 관리" Width="780" Height="570" MinWidth="680" MinHeight="500"
+        WindowStartupLocation="CenterOwner" Background="#10141E" Foreground="#EDF2FC">
+    <Window.Resources>
+        <Style TargetType="Button"><Setter Property="Padding" Value="14,8"/><Setter Property="Margin" Value="0,0,8,0"/></Style>
+        <Style TargetType="TextBlock"><Setter Property="TextWrapping" Value="Wrap"/></Style>
+    </Window.Resources>
+    <Grid Margin="24">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock Text="가상 모니터 관리" FontSize="24" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding CountText}" Margin="0,8,0,16"/>
+        </StackPanel>
+        <StackPanel Grid.Row="1" Margin="0,0,0,16">
+            <WrapPanel>
+                <Button Content="모니터 1개 추가" Command="{Binding AddCommand}"/>
+                <Button Content="선택 모니터 삭제" Command="{Binding RemoveCommand}"/>
+                <Button Content="모두 삭제" Command="{Binding RemoveAllCommand}"/>
+                <Button Content="{Binding ToggleSelectedButtonText}" Command="{Binding ToggleSelectedCommand}"/>
+                <Button Content="확장 모드 적용" Command="{Binding ExtendCommand}"/>
+                <Button Content="새로 고침" Command="{Binding RefreshCommand}"/>
+            </WrapPanel>
+            <TextBlock Text="가상 모니터만 추가·삭제하며 실제(메인) 모니터는 삭제되지 않습니다. 추가한 모니터는 메인 화면 콤보박스에서 개별적으로 켜고 끌 수 있습니다."
+                       Foreground="#A9B7CC" Margin="0,10,0,0"/>
+        </StackPanel>
+        <Grid Grid.Row="2" IsEnabled="{Binding CanEdit}">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="3*"/></Grid.ColumnDefinitions>
+            <ListBox ItemsSource="{Binding Monitors}" SelectedItem="{Binding Selected}" DisplayMemberPath="DisplayName"
+                     Background="#1D283D" Foreground="White" Margin="0,0,20,0"/>
+            <StackPanel Grid.Column="1">
+                <TextBlock Text="{Binding SelectedStateText}" Foreground="#92B5FF" Margin="0,0,0,14"/>
+                <TextBlock Text="앱에서 사용할 이름"/>
+                <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" MaxLength="64" Margin="0,8,0,8" Padding="6"/>
+                <Button Content="이름 저장" Command="{Binding SaveNameCommand}" HorizontalAlignment="Left"/>
+                <TextBlock Text="Windows 장치명은 유지됩니다. 지정한 이름은 메인 화면 콤보박스와 미리보기 목록에 표시됩니다."
+                           Foreground="#A9B7CC" Margin="0,8,0,20"/>
+                <TextBlock Text="해상도 · 주사율 (켜진 모니터에서 변경 가능)"/>
+                <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}" DisplayMemberPath="Label" Margin="0,8,0,8"/>
+                <Button Content="화면 모드 적용" Command="{Binding ApplyModeCommand}" HorizontalAlignment="Left"/>
+            </StackPanel>
+        </Grid>
+        <TextBlock Grid.Row="3" Text="{Binding Status}" Foreground="#B8D0FF" Margin="0,20,0,0"/>
+    </Grid>
+</Window>
