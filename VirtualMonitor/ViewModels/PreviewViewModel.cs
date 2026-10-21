@@ -102,7 +102,7 @@ internal sealed class PreviewViewModel : ObservableObject, IDisposable
             outputError = false;
             frameCount = 0;
             statsStarted = clock.Elapsed.TotalSeconds;
-            if (value != null) Status = $"{value.Width} × {value.Height} 원본 캡처 · 60fps 목표";
+            if (value != null) Status = $"{value.Width} × {value.Height} 원본 캡처 · 프레임 도착에 맞춰 갱신";
         }
     }
     public WriteableBitmap? Frame { get => frame; private set => SetProperty(ref frame, value); }
@@ -112,7 +112,7 @@ internal sealed class PreviewViewModel : ObservableObject, IDisposable
     public bool IsCompactMode { get => compactMode; set => SetProperty(ref compactMode, value); }
     public bool CanSelectDisplay => !isBoundToDevice;
     public string HeaderTitle => SelectedDisplay?.DisplayName ?? preferredDisplayName ?? "가상 모니터";
-    public string WindowTitle => $"{HeaderTitle} · 원본 화질 / 60fps";
+    public string WindowTitle => $"{HeaderTitle} · 원본 화질 / 자동 프레임 갱신";
     public bool IsFullScreen
     {
         get => fullScreen;
@@ -336,7 +336,7 @@ internal sealed class PreviewViewModel : ObservableObject, IDisposable
         double now = clock.Elapsed.TotalSeconds;
         if (now - statsStarted >= 1)
         {
-            Status = $"{buffer.Width} × {buffer.Height} · 원본 무압축 · {frameCount / (now - statsStarted):F1}fps 갱신 / 목표 60 · " +
+            Status = $"{buffer.Width} × {buffer.Height} · 원본 무압축 · {frameCount / (now - statsStarted):F1}fps 갱신 · " +
                 (ActualPixels ? "1:1 픽셀" : "창에 맞춤 (글자가 흐리면 1:1 선택)") + " · 보기 전용";
             frameCount = 0;
             statsStarted = now;

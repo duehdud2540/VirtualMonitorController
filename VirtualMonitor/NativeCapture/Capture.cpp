@@ -9,11 +9,20 @@
 #include <winrt/Windows.Graphics.DirectX.h>
 #include <winrt/Windows.Graphics.DirectX.Direct3D11.h>
 #include <memory>
+#include <atomic>
 
 using namespace winrt;
 using namespace winrt::Windows::Graphics::Capture;
 using namespace winrt::Windows::Graphics::DirectX;
 using namespace winrt::Windows::Graphics::DirectX::Direct3D11;
+
+// The callback owns this separately so an in-flight callback cannot touch a destroyed Capture.
+struct FrameSignal
+{
+    HANDLE ready = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    std::atomic<int64_t> arrivals{ 0 };
+    ~FrameSignal() { if (ready) CloseHandle(ready); }
+};
 
 struct Capture
 {
@@ -24,11 +33,16 @@ struct Capture
     GraphicsCaptureItem item{ nullptr };
     Direct3D11CaptureFramePool pool{ nullptr };
     GraphicsCaptureSession session{ nullptr };
+    std::shared_ptr<FrameSignal> signal = std::make_shared<FrameSignal>();
+    Direct3D11CaptureFramePool::FrameArrived_revoker arrived;
+    int64_t readFrames = 0, skippedFrames = 0;
+    int64_t originalInterval = -1, effectiveInterval = -1;
     bool mapped = false;
     UINT width = 0, height = 0;
 
     ~Capture()
     {
+        arrived.revoke();
         if (mapped) context->Unmap(staging.get(), 0);
         try { if (session) session.Close(); } catch (...) {}
         try { if (pool) pool.Close(); } catch (...) {}
@@ -43,6 +57,7 @@ extern "C" __declspec(dllexport) HRESULT __cdecl CaptureCreate(HMONITOR monitor,
     {
         if (!GraphicsCaptureSession::IsSupported()) return E_NOTIMPL;
         auto capture = std::make_unique<Capture>();
+        if (!capture->signal->ready) throw_last_error();
         check_hresult(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
             D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, D3D11_SDK_VERSION,
             capture->device.put(), nullptr, capture->context.put()));
@@ -56,6 +71,20 @@ extern "C" __declspec(dllexport) HRESULT __cdecl CaptureCreate(HMONITOR monitor,
             DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, capture->item.Size());
         capture->session = capture->pool.CreateCaptureSession(capture->item);
         capture->session.IsCursorCaptureEnabled(true);
+        // Newer Windows versions expose capture pacing separately from the monitor refresh rate.
+        // Request every available frame; older Windows keeps its supported default.
+        if (auto pacing = capture->session.try_as<IGraphicsCaptureSession5>())
+        {
+            capture->originalInterval = pacing.MinUpdateInterval().count();
+            pacing.MinUpdateInterval(winrt::Windows::Foundation::TimeSpan{ 0 });
+            capture->effectiveInterval = pacing.MinUpdateInterval().count();
+        }
+        capture->arrived = capture->pool.FrameArrived(auto_revoke,
+            [signal = capture->signal](auto const&, auto const&) noexcept
+            {
+                signal->arrivals.fetch_add(1, std::memory_order_relaxed);
+                SetEvent(signal->ready);
+            });
         capture->session.StartCapture();
         *output = capture.release();
         return S_OK;
@@ -74,7 +103,8 @@ extern "C" __declspec(dllexport) HRESULT __cdecl CaptureRead(Capture* capture, v
         auto frame = capture->pool.TryGetNextFrame();
         if (!frame) return S_FALSE;
         // Prefer the latest frame over replaying an old queue.
-        while (auto newer = capture->pool.TryGetNextFrame()) { frame.Close(); frame = newer; }
+        while (auto newer = capture->pool.TryGetNextFrame()) { frame.Close(); frame = newer; ++capture->skippedFrames; }
+        ++capture->readFrames;
         if (capture->mapped) { capture->context->Unmap(capture->staging.get(), 0); capture->mapped = false; }
         auto size = frame.ContentSize();
         auto access = frame.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
@@ -118,7 +148,8 @@ extern "C" __declspec(dllexport) HRESULT __cdecl CaptureReadTexture(Capture* cap
     {
         auto frame = capture->pool.TryGetNextFrame();
         if (!frame) return S_FALSE;
-        while (auto newer = capture->pool.TryGetNextFrame()) { frame.Close(); frame = newer; }
+        while (auto newer = capture->pool.TryGetNextFrame()) { frame.Close(); frame = newer; ++capture->skippedFrames; }
+        ++capture->readFrames;
         auto size = frame.ContentSize();
         auto access = frame.Surface().as<::Windows::Graphics::DirectX::Direct3D11::IDirect3DDxgiInterfaceAccess>();
         com_ptr<ID3D11Texture2D> source;
@@ -143,5 +174,25 @@ extern "C" __declspec(dllexport) HRESULT __cdecl CaptureReadTexture(Capture* cap
         return S_OK;
     }
     catch (...) { return to_hresult(); }
+}
+
+// Borrowed event remains valid until CaptureDestroy; only the owning capture worker waits on it.
+extern "C" __declspec(dllexport) HRESULT __cdecl CaptureGetFrameEvent(Capture* capture, HANDLE* ready)
+{
+    if (!capture || !ready) return E_INVALIDARG;
+    *ready = capture->signal->ready;
+    return S_OK;
+}
+
+extern "C" __declspec(dllexport) HRESULT __cdecl CaptureGetStatistics(Capture* capture,
+    int64_t* arrivals, int64_t* reads, int64_t* skipped, int64_t* originalInterval, int64_t* effectiveInterval)
+{
+    if (!capture || !arrivals || !reads || !skipped || !originalInterval || !effectiveInterval) return E_INVALIDARG;
+    *arrivals = capture->signal->arrivals.load(std::memory_order_relaxed);
+    *reads = capture->readFrames;
+    *skipped = capture->skippedFrames;
+    *originalInterval = capture->originalInterval;
+    *effectiveInterval = capture->effectiveInterval;
+    return S_OK;
 }
 

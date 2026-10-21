@@ -18,6 +18,16 @@ internal sealed class ScreenCapture : ICaptureSession
     public int Stride { get; private set; }
     public int BufferSize => checked(Stride * Height);
     public string DisplayName { get; }
+    public nint FrameAvailableEvent { get; private set; }
+    public CaptureStatistics? Statistics
+    {
+        get
+        {
+            Check(CaptureGetStatistics(handle, out long arrivals, out long reads, out long skipped,
+                out long originalInterval, out long effectiveInterval));
+            return new(arrivals, reads, skipped, originalInterval, effectiveInterval);
+        }
+    }
 
     // 현재 스레드의 WinRT를 준비하고 화면 중심 좌표로 모니터를 찾아 C++ 캡처 세션을 생성합니다. 실패하면 부분 생성 자원도 정리합니다.
     public ScreenCapture(MonitorDisplay display)
@@ -31,6 +41,8 @@ internal sealed class ScreenCapture : ICaptureSession
             nint monitor = MonitorFromPoint(new Point { X = display.Left + display.Width / 2, Y = display.Top + display.Height / 2 }, 0);
             if (monitor == 0) throw new InvalidOperationException("선택한 가상 모니터를 찾을 수 없습니다.");
             Check(CaptureCreate(monitor, out handle));
+            Check(CaptureGetFrameEvent(handle, out nint frameEvent));
+            FrameAvailableEvent = frameEvent;
         }
         catch { Dispose(); throw; }
     }
@@ -82,6 +94,7 @@ internal sealed class ScreenCapture : ICaptureSession
     {
         if (handle != 0) { CaptureDestroy(handle); handle = 0; }
         Pixels = 0;
+        Texture = Device = FrameAvailableEvent = 0;
         if (apartmentInitialized) { RoUninitialize(); apartmentInitialized = false; }
     }
 
@@ -107,4 +120,13 @@ internal sealed class ScreenCapture : ICaptureSession
     [DefaultDllImportSearchPaths(DllImportSearchPath.AssemblyDirectory | DllImportSearchPath.System32)]
     [DllImport("VirtualMonitor.Capture.dll", CallingConvention = CallingConvention.Cdecl)]
     private static extern void CaptureDestroy(nint capture);
+
+    [DefaultDllImportSearchPaths(DllImportSearchPath.AssemblyDirectory | DllImportSearchPath.System32)]
+    [DllImport("VirtualMonitor.Capture.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int CaptureGetFrameEvent(nint capture, out nint ready);
+
+    [DefaultDllImportSearchPaths(DllImportSearchPath.AssemblyDirectory | DllImportSearchPath.System32)]
+    [DllImport("VirtualMonitor.Capture.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int CaptureGetStatistics(nint capture, out long arrivals, out long reads,
+        out long skipped, out long originalInterval, out long effectiveInterval);
 }

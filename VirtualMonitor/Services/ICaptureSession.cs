@@ -11,5 +11,10 @@ internal interface ICaptureSession : IDisposable
     int Stride { get; }
     int BufferSize { get; }
     string DisplayName { get; }
+    nint FrameAvailableEvent => 0;
+    CaptureStatistics? Statistics => null;
     bool Read(MonitorDisplay display, bool gpu = false);
 }
+
+internal sealed record CaptureStatistics(long Arrivals, long Reads, long Skipped,
+    long OriginalIntervalTicks, long EffectiveIntervalTicks);

@@ -85,13 +85,12 @@ internal sealed class PreviewCaptureService(Dispatcher dispatcher, Func<MonitorD
         catch (Exception ex) { SwitchToWpf(ex, cancellation); }
     }
 
-    // 약 60fps 주기로 캡처하여 UI에 전달합니다. UI 복사가 끝날 때까지 기다려 다음 Read가 픽셀 메모리를 덮어쓰지 않게 하며, 정지·화면 변경·오류 시 캡처를 해제합니다.
+    // 프레임 도착 신호에 맞춰 처리합니다. 유한 대기로 정지·화면 변경·재출력 요청에도 반응합니다.
     private void CaptureLoop()
     {
         ICaptureSession? capture = null;
         var cancellation = stop.Token;
-        nint preciseTimer = CreateWaitableTimerEx(0, null, 2, 0x1F0003);
-        double deadline = clock.Elapsed.TotalMilliseconds;
+        double nextStatistics = 0;
         int failures = 0;
         try
         {
@@ -106,7 +105,6 @@ internal sealed class PreviewCaptureService(Dispatcher dispatcher, Func<MonitorD
                     capture = null;
                     lock (lifetime) { releaseRequest?.TrySetResult(); releaseRequest = null; }
                     if (cancellation.WaitHandle.WaitOne(100)) break;
-                    deadline = clock.Elapsed.TotalMilliseconds;
                     continue;
                 }
                 try
@@ -115,6 +113,23 @@ internal sealed class PreviewCaptureService(Dispatcher dispatcher, Func<MonitorD
                     {
                         capture?.Dispose(); capture = null;
                         capture = createSession(display);
+                        nextStatistics = clock.Elapsed.TotalMilliseconds;
+                    }
+                    nint ready = capture.FrameAvailableEvent;
+                    if (ready != 0)
+                    {
+                        uint wait = WaitForMultipleObjects(2,
+                            new[] { cancellation.WaitHandle.SafeWaitHandle.DangerousGetHandle(), ready }, false, 16);
+                        if (wait == 0) break;
+                        if (wait == uint.MaxValue) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                        if (Volatile.Read(ref paused) || !ReferenceEquals(display, Volatile.Read(ref selected))) continue;
+                        if (wait == 258) { TickOutput(cancellation); continue; }
+                    }
+                    else if (cancellation.WaitHandle.WaitOne(7)) break; // Non-event diagnostic sessions.
+                    if (clock.Elapsed.TotalMilliseconds >= nextStatistics)
+                    {
+                        log.Write("capture.frames", new { display = display.Name, capture.Statistics });
+                        nextStatistics = clock.Elapsed.TotalMilliseconds + 5000;
                     }
                     double started = clock.Elapsed.TotalMilliseconds;
                     CaptureRequests++;
@@ -169,19 +184,6 @@ internal sealed class PreviewCaptureService(Dispatcher dispatcher, Func<MonitorD
                     }
                     if (cancellation.WaitHandle.WaitOne(Math.Min(4000, 250 * (1 << Math.Min(failures, 4))))) break;
                 }
-                deadline = Math.Max(deadline + 1000.0 / 60, clock.Elapsed.TotalMilliseconds);
-                double delay = deadline - clock.Elapsed.TotalMilliseconds;
-                if (delay > 0)
-                {
-                    if (preciseTimer != 0)
-                    {
-                        long due = -(long)Math.Max(1, delay * 10000);
-                        if (!SetWaitableTimer(preciseTimer, ref due, 0, 0, 0, false))
-                            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-                        if (WaitForMultipleObjects(2, new[] { cancellation.WaitHandle.SafeWaitHandle.DangerousGetHandle(), preciseTimer }, false, uint.MaxValue) == 0) break;
-                    }
-                    else if (cancellation.WaitHandle.WaitOne((int)Math.Ceiling(delay))) break;
-                }
             }
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
@@ -193,7 +195,6 @@ internal sealed class PreviewCaptureService(Dispatcher dispatcher, Func<MonitorD
         finally
         {
             capture?.Dispose();
-            if (preciseTimer != 0) CloseHandle(preciseTimer);
             lock (lifetime)
             {
                 workerFinished = true;
@@ -204,13 +205,6 @@ internal sealed class PreviewCaptureService(Dispatcher dispatcher, Func<MonitorD
         }
     }
 
-    // 정밀 프레임 대기용 Windows 타이머를 생성합니다. 실패하면 호출부가 일반 대기로 대체합니다.
-    [DllImport("kernel32.dll", EntryPoint = "CreateWaitableTimerExW", CharSet = CharSet.Unicode)] private static extern nint CreateWaitableTimerEx(nint attributes, string? name, uint flags, uint access);
-    // 타이머가 깨어날 시각을 설정합니다. 음수 due는 현재부터의 상대 시간을 100ns 단위로 나타냅니다.
-    [DllImport("kernel32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetWaitableTimer(nint timer, ref long due, int period, nint callback, nint argument, [MarshalAs(UnmanagedType.Bool)] bool resume);
-    // 취소 신호와 프레임 타이머 중 먼저 발생한 것을 기다려 종료 요청에도 빠르게 반응합니다.
-    [DllImport("kernel32.dll")] private static extern uint WaitForMultipleObjects(uint count, nint[] handles, [MarshalAs(UnmanagedType.Bool)] bool all, uint timeout);
-    // 사용을 마친 타이머의 Windows 핸들을 반환합니다.
-    [DllImport("kernel32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool CloseHandle(nint handle);
+    [DllImport("kernel32.dll", SetLastError = true)] private static extern uint WaitForMultipleObjects(uint count, nint[] handles, [MarshalAs(UnmanagedType.Bool)] bool all, uint timeout);
 
 }

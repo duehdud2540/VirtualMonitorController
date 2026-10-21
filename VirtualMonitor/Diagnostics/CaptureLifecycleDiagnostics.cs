@@ -22,7 +22,52 @@ internal sealed class CaptureLifecycleDiagnostics(Func<Dispatcher, PreviewCaptur
         await capture.PauseAndReleaseAsync().WaitAsync(TimeSpan.FromSeconds(2));
         if (capture.CaptureRequests != 0) throw new InvalidOperationException("No monitor should be captured by this diagnostic.");
         await CheckActiveCaptureAsync(dispatcher);
+        await CheckFrameEventsAsync(dispatcher);
         Console.WriteLine("Capture lifecycle: idle, injected session, GPU output fallback and disposal checks passed (no live devices).");
+    }
+    private async Task CheckFrameEventsAsync(Dispatcher dispatcher)
+    {
+        var display = new MonitorDisplay("event-fake", "", 0, 0, 1, 1, true);
+        var created = new TaskCompletionSource<EventCapture>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var submitted = new SemaphoreSlim(0);
+        await using var service = new PreviewCaptureService(dispatcher, d =>
+        {
+            var session = new EventCapture(d);
+            created.SetResult(session);
+            return session;
+        }, log);
+        service.WorkerOutput = _ => { submitted.Release(); return true; };
+        service.SelectDisplay(display);
+        service.Start();
+        var capture = await created.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await Task.Delay(80);
+        Require(capture.Reads == 0, "idle frame event does not poll the capture pool");
+        for (int i = 0; i < 5; i++)
+        {
+            capture.Ready.Set();
+            Require(await submitted.WaitAsync(TimeSpan.FromSeconds(2)), "frame event wakes capture worker");
+        }
+        await service.PauseAndReleaseAsync().WaitAsync(TimeSpan.FromSeconds(2));
+        Require(capture.Reads == 5 && capture.Released, "each frame signal is consumed and pause releases waiting session");
+        await service.StopAsync().WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    private sealed class EventCapture(MonitorDisplay display) : ICaptureSession
+    {
+        public AutoResetEvent Ready { get; } = new(false);
+        public int Reads;
+        public bool Released;
+        public nint FrameAvailableEvent => Ready.SafeWaitHandle.DangerousGetHandle();
+        public nint Pixels => 0;
+        public nint Texture => 0;
+        public nint Device => 0;
+        public int Width => 1;
+        public int Height => 1;
+        public int Stride => 4;
+        public int BufferSize => 4;
+        public string DisplayName => display.Name;
+        public bool Read(MonitorDisplay target, bool gpu = false) { Interlocked.Increment(ref Reads); return true; }
+        public void Dispose() { Ready.Dispose(); Released = true; }
     }
     private async Task CheckActiveCaptureAsync(Dispatcher dispatcher)
     {
