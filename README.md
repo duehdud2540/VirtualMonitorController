@@ -1,3 +1,6 @@
+
+[![Download Latest](https://img.shields.io/badge/Download-Latest_Release-blue?style=for-the-badge&logo=windows)](https://github.com/{username}/{repo}/releases/latest)
+
 # VirtualMonitor
 
 **물리 모니터를 추가하지 않고 Windows에 가상 화면을 만들고, 그 화면을 별도의 창으로 확인할 수 있는 데스크톱 앱입니다.**
